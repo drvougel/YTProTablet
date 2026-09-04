@@ -14,74 +14,69 @@
 
 ---
 
-## Über diesen Fork
+## About this fork
 
-Angepasst für das **Xiaomi Pad 6 Max 14"** (2880×1800, Dichte 360 → 1280×800 dp
-im Querformat, Android 15, Snapdragon 8+ Gen 1).
+Tuned for the **Xiaomi Pad 6 Max 14"** (2880×1800, density 360, so 1280×800 dp in
+landscape; Android 15, Snapdragon 8+ Gen 1).
 
-Upstream lädt fest `m.youtube.com` und hat keinerlei responsives Verhalten —
-keine Media Queries, keine Resize-Listener, durchgehend feste Pixelwerte. Auf
-einem 14"-Panel ergibt das ein gestrecktes Handy-Layout. Dieser Fork lädt
-stattdessen die Desktop-Seite und überbrückt die Lücke mit einer additiven
-Injektionsschicht, sodass die Upstream-Skripte unverändert weiterlaufen.
+Upstream hardcodes `m.youtube.com` and has no responsive handling whatsoever — no
+media queries, no resize listeners, fixed-pixel inline styles throughout. On a
+14" panel that gives you the phone layout stretched across the screen. This fork
+loads the desktop site instead and bridges the gap with an additive injection
+layer, so the upstream scripts keep working unmodified.
 
-> Der Download-Button weiter oben zeigt auf den Upstream-Build. Für diesen Fork
-> gilt der Abschnitt [Bauen](#bauen).
+### What is different
 
-### Was anders ist
+- **Desktop layout** with sidebar and recommendations column instead of the
+  mobile view
+- **True fullscreen** with no Android status or navigation bar; the clock and
+  battery level sit in a white pill inside YouTube's own masthead
+- **Icon-only action row**: the YTPRO buttons sit unlabelled in YouTube's own
+  action row next to Subscribe, and YouTube's own labels are hidden too — the
+  like and dislike counts stay, since they are data rather than labels
+- **Recommendations scroll independently**, so the playing video stays put
+- **Comments first**, with the video description behind a toggle
+- **Miniplayer on back**: playback continues in the bottom-right corner
+- **Ads hidden**, including the shared inline preview player that YouTube uses to
+  lay video ads over real tiles
+- **Gesture zones** capped at 96 dp and made distance-based, instead of one step
+  per touchmove event, which tied sensitivity to the 120 Hz digitizer
+- **Downloader removed**; `innertube.js` is no longer injected
 
-- **Desktop-Layout** mit Sidebar und Empfehlungsspalte statt Handy-Ansicht
-- **Echtes Vollbild** ohne Android-Status- und Navigationsleiste; Uhrzeit und
-  Akkustand stehen als weisse Pille in YouTubes eigener Kopfzeile
-- **Icon-Leiste**: die YTPRO-Buttons sitzen ohne Text in YouTubes Aktionszeile
-  neben „Abonnieren", YouTubes eigene Labels sind ebenfalls ausgeblendet
-  (Like- und Dislike-Zahlen bleiben stehen)
-- **Empfehlungen scrollen unabhängig** — das laufende Video bleibt stehen
-- **Kommentare zuerst**, die Videobeschreibung liegt hinter einem Umschalter
-- **Miniplayer beim Zurückgehen**: die Wiedergabe läuft unten rechts weiter
-- **Werbung ausgeblendet**, inklusive des geteilten Inline-Vorschauplayers, über
-  den YouTube Videoanzeigen auf echte Kacheln legt
-- **Gestenzonen** auf 96 dp begrenzt und distanzbasiert statt an die
-  120-Hz-Abtastrate des Digitizers gekoppelt
-- **Downloader entfernt**; `innertube.js` wird nicht mehr injiziert
+### Bugs fixed along the way
 
-### Nebenbei behobene Fehler
+The manifest declared a receiver in a package where the class does not exist, so
+every transport button on the media notification was dead. `DownloadFromIntentFilter`
+ran `onCreate` twice, producing two page loads, a duplicated and leaked receiver
+and two thread pools. `MediaMuxerUtils` allocated a fixed 1 MiB sample buffer,
+smaller than a single high-bitrate 4K keyframe. `hasStoragePermission()` returned
+`true` exactly when permission was **denied**. Leaving fullscreen locked the
+activity to portrait permanently. Both runtime receivers were exported on
+unprotected implicit actions, and the `MediaSession` was never released.
 
-Das Manifest deklarierte einen Receiver in einem Paket, in dem die Klasse nicht
-existiert — sämtliche Transportknöpfe der Benachrichtigung waren tot.
-`DownloadFromIntentFilter` durchlief `onCreate` zweimal, was zwei Seitenladungen,
-einen doppelt registrierten und geleakten Receiver und zwei Thread-Pools ergab.
-`MediaMuxerUtils` allozierte einen festen 1-MiB-Sample-Puffer, kleiner als ein
-einzelner hochbitratiger 4K-Keyframe. `hasStoragePermission()` lieferte genau
-dann `true`, wenn die Berechtigung **verweigert** war. Das Verlassen des
-Vollbilds sperrte die Activity dauerhaft ins Hochformat. Beide Laufzeit-Receiver
-waren auf ungeschützten impliziten Actions exportiert, und die `MediaSession`
-wurde nie freigegeben.
+### How it is put together
 
-### Aufbau
+The footprint is deliberately small, so rebasing onto upstream stays cheap:
 
-Der Eingriff bleibt bewusst klein, damit ein Rebase auf Upstream günstig bleibt:
-
-| Datei | Rolle |
+| File | Role |
 |---|---|
-| `TabletMode.java` | Grossbildschirm-Erkennung, Desktop-UA, 120 Hz, Asset-Laden |
-| `TabletBridge.java` | Akkustand für die Anzeige in der Kopfzeile |
-| `assets/ytpro-tablet.js` | DOM-Adapter, CSS-Overrides, Gesten- und Panel-Korrekturen |
+| `TabletMode.java` | large-screen detection, desktop UA, 120 Hz, asset loading |
+| `TabletBridge.java` | battery level for the readout in the masthead |
+| `assets/ytpro-tablet.js` | DOM adapter, CSS overrides, gesture and panel fixes |
 
-Diese drei Dateien sind neu und haben damit keine Merge-Fläche. Alles Übrige
-sind einzeilige, mit `YTPRO-TABLET` markierte Patches. Die Dateien unter
-`scripts/` sind unverändert.
+Those three files are new and therefore carry no merge surface. Everything else
+is one-line patches marked `YTPRO-TABLET`. The files under `scripts/` are
+untouched.
 
-Der DOM-Adapter ist der einzige wirklich fragile Teil: `script.js` enthält keinen
-einzigen `ytd-*`-Selektor, weshalb die 3 IDs, 6 Klassen und 7 `ytm-*`-Tags, die
-es erwartet, auf das Desktop-DOM abgebildet werden. YouTube ändert dieses DOM
-häufiger als das mobile. Als Rückfallebene lässt sich die Einstellung
-`desktopSite` auf `false` setzen, dann verhält sich die App wieder wie Upstream.
+The DOM adapter is the one genuinely fragile part: `script.js` contains not a
+single `ytd-*` selector, so the 3 ids, 6 classes and 7 `ytm-*` tags it expects are
+mapped onto the desktop DOM. YouTube changes that DOM more often than the mobile
+one. The way back is the `desktopSite` preference — set it to `false` and the app
+behaves like upstream again.
 
-<a name="bauen"></a>
-### Bauen
+### Building
 
-Erfordert JDK 17+ und ein Android-SDK mit Platform 36:
+Needs JDK 17+ and an Android SDK with platform 36:
 
 ```bash
 ./gradlew assembleRelease
@@ -91,28 +86,10 @@ Erfordert JDK 17+ und ein Android-SDK mit Platform 36:
 java -jar signer/apksigner.jar sign --key signer/apkeasytool.pk8 --cert signer/apkeasytool.pem --v4-signing-enabled false --out app/build/outputs/apk/release/youtube_pro_signed.apk app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
-Die Signatur entspricht der von Upstream, ein `adb install -r` aktualisiert also
-eine bestehende Installation, ohne Herz-Liste, Einstellungen oder Anmeldung zu
-verlieren.
+The signature matches upstream's, so `adb install -r` updates an existing
+install in place without losing hearts, settings or your sign-in.
 
 ---
-
-### Become a Sponsor 
----
-> [!TIP]
-> If you like this project, consider [sponsoring](https://github.com/sponsors/prateek-chaubey) to support the author 🌸
----
-
-## Download YT PRO
-
-[![Download zip](https://custom-icon-badges.herokuapp.com/badge/-Download-ff0000?style=for-the-badge&logo=download&logoColor=white "Download Apk")](https://nightly.link/prateek-chaubey/YTPro/workflows/gradle/main/YTPRO.zip)
-
-#### Screenshots
-| | | |
-|:--:|:--:|:--:| 
-|<img src='https://raw.githubusercontent.com/prateek-chaubey/YTPro/main/.github/img/screen3.jpg'  > | <img src='https://raw.githubusercontent.com/prateek-chaubey/YTPro/main/.github/img/screen2.jpg'  > |<img src='https://raw.githubusercontent.com/prateek-chaubey/YTPro/main/.github/img/screen5.jpg'  > | 
-|<img src='https://raw.githubusercontent.com/prateek-chaubey/YTPro/main/.github/img/screen6.jpg'  > | <img src='https://raw.githubusercontent.com/prateek-chaubey/YTPro/main/.github/img/screen4.jpg'  > |<img src='https://raw.githubusercontent.com/prateek-chaubey/YTPro/main/.github/img/screen1.jpg'  > |
-
 
 ## Features
  * <img src='https://raw.githubusercontent.com/prateek-chaubey/YTPro/main/.github/img/gemini-logo-13486188-10900314-unscreen-ezgif.com-crop.gif' height=15 width=15 > Google Gemini
