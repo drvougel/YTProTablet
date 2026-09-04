@@ -263,6 +263,115 @@ function tagFeatureButtons() {
 	}
 }
 
+/* ------------------------------------------------------------------ *
+ * Scroll docking
+ *
+ * Once the player is half scrolled out of view, pin it to the bottom right so
+ * the comments stay readable while the video keeps playing.
+ *
+ * Deliberately NOT YouTube's own miniplayer: its "i" shortcut docks the player
+ * but also navigates back to the previous page, which takes the comment list
+ * with it (verified on the device). Scaling the existing #movie_player where it
+ * stands keeps playback, the DOM and the comment list intact, and because only
+ * that element leaves the flow its container keeps its height, so the page does
+ * not jump.
+ * ------------------------------------------------------------------ */
+var DOCK_WIDTH = 400;
+var DOCK_GAP = 16;
+var docked = false;
+var dockW = 0, dockH = 0, dockScale = 1;
+
+function placeDock() {
+	if (!dockW) return;
+	var st = document.documentElement.style;
+	st.setProperty('--ytpro-dock-x',
+		Math.round(window.innerWidth - dockW * dockScale - DOCK_GAP) + 'px');
+	st.setProperty('--ytpro-dock-y',
+		Math.round(window.innerHeight - dockH * dockScale - DOCK_GAP) + 'px');
+}
+
+/* Where the player came from, so it can be put back exactly there. */
+var dockParent = null, dockNext = null;
+
+/* z-index does not settle this. Measured on the device: with #secondary sticky,
+ * the recommendations paint over the docked player no matter what z-index it
+ * carries, and the only two things that changed it were making #secondary static
+ * - which would undo its independent scrolling - or moving the player out to
+ * <body>. Moving a div does not interrupt the <video> inside it (verified:
+ * playback continued and the geometry was unchanged), so that is the way. */
+function reparentForDock(mp, on) {
+	try {
+		if (on) {
+			dockParent = mp.parentElement;
+			dockNext = mp.nextSibling;
+			document.body.appendChild(mp);
+		} else if (dockParent) {
+			if (dockNext && dockNext.parentNode === dockParent) {
+				dockParent.insertBefore(mp, dockNext);
+			} else if (dockParent.isConnected) {
+				dockParent.appendChild(mp);
+			}
+			dockParent = null;
+			dockNext = null;
+		}
+	} catch (e) {}
+}
+
+function setDock(on) {
+	if (on === docked) return;
+	if (on) {
+		var mp = document.getElementById('movie_player');
+		if (!mp) return;
+		/* Measured while the player is still in normal flow, so this is its real
+		 * size. Once it goes position:fixed it would stretch to the viewport and
+		 * the scale would be computed off the wrong base. */
+		var r = mp.getBoundingClientRect();
+		dockW = Math.round(r.width) || 880;
+		dockH = Math.round(r.height) || 495;
+		dockScale = Math.min(1, DOCK_WIDTH / dockW);
+		var st = document.documentElement.style;
+		st.setProperty('--ytpro-dock-w', dockW + 'px');
+		st.setProperty('--ytpro-dock-h', dockH + 'px');
+		st.setProperty('--ytpro-dock-scale', dockScale.toFixed(4));
+		placeDock();
+		reparentForDock(mp, true);
+	} else {
+		var back = document.getElementById('movie_player');
+		if (back) reparentForDock(back, false);
+	}
+	docked = on;
+	document.documentElement.classList.toggle('ytpro-dock', on);
+}
+
+function updateDock() {
+	if (!DESKTOP) return;
+	if (location.pathname.indexOf('/watch') !== 0) { setDock(false); return; }
+
+	var flexy = document.querySelector('ytd-watch-flexy');
+	var host = document.querySelector('ytd-watch-flexy #player');
+	if (!flexy || !host || !document.getElementById('movie_player')) { setDock(false); return; }
+
+	/* Theater mode, fullscreen and YouTube's own miniplayer each own the player
+	 * already - ytdMiniplayerComponentVisible is how it marks itself active. */
+	if (flexy.hasAttribute('theater') || document.fullscreenElement
+		|| document.querySelector('ytd-miniplayer.ytdMiniplayerComponentVisible')) {
+		setDock(false);
+		return;
+	}
+
+	var r = host.getBoundingClientRect();
+	if (r.height <= 0) return;
+	/* Hysteresis, so a scroll that stops right on the threshold does not flap. */
+	if (!docked && r.top <= -r.height * 0.5) setDock(true);
+	else if (docked && r.top >= -r.height * 0.15) setDock(false);
+}
+
+window.addEventListener('scroll', updateDock, { passive: true });
+window.addEventListener('resize', function () {
+	if (docked) placeDock();   // keep the corner gap after a rotation or resize
+	updateDock();
+}, { passive: true });
+
 var INFO_KEY = 'tabletShowInfo';
 var INFO_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
 	+ '<path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 '
@@ -546,6 +655,29 @@ var CSS = [
 '  ytd-watch-metadata #actions button.ytSpecButtonShapeNextHost {',
 '    min-width: 0 !important; }',
 
+/* Docked player.
+   ytd-watch-flexy #player carries transform: matrix(1,0,0,1,0,0) - an identity
+   transform, but any transform other than none makes that element the containing
+   block for fixed descendants. Without clearing it the docked player anchors to
+   #player instead of the viewport and scrolls away with the page.
+   Position is then expressed as translate() from the top left with
+   transform-origin 0 0, rather than right/bottom, so the scaled box lands exactly
+   where the numbers say. Width and height are pinned to the pre-dock size,
+   otherwise the fixed element stretches to the viewport and the scale is
+   computed off the wrong base. */
+
+'  html.ytpro-dock #movie_player {',
+'    position: fixed !important; left: 0 !important; top: 0 !important;',
+'    right: auto !important; bottom: auto !important;',
+'    width: var(--ytpro-dock-w, 880px) !important;',
+'    height: var(--ytpro-dock-h, 495px) !important;',
+'    transform-origin: 0 0 !important;',
+'    transform: translate(var(--ytpro-dock-x, 0px), var(--ytpro-dock-y, 0px))',
+'               scale(var(--ytpro-dock-scale, .45)) !important;',
+'    z-index: 9000 !important; border-radius: 12px !important;',
+'    overflow: hidden !important;',
+'    box-shadow: 0 6px 28px rgba(0, 0, 0, .55) !important; }',
+
 /* Recommendations column scrolls on its own.
    Desktop YouTube scrolls the whole document, so reading further down the
    related list drags the player out of view. Pin the column under the masthead
@@ -701,6 +833,7 @@ function tick() {
 	if (DESKTOP) {
 		ensureInfoButton();
 		ensureStatusChip();
+		updateDock();
 	}
 	takeOverGestures();
 }
