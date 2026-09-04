@@ -585,9 +585,12 @@ var CSS = [
 '  ytd-rich-item-renderer:has(ytd-display-ad-renderer),',
 '  ytd-rich-item-renderer:has(ytd-in-feed-ad-layout-renderer),',
 '  ytd-rich-section-renderer:has(ytd-statement-banner-renderer),',
-'  ytd-rich-section-renderer:has(ytd-brand-video-shelf-renderer),',
-'  ytd-item-section-renderer:has(> #contents > ytd-ad-slot-renderer) {',
+'  ytd-rich-section-renderer:has(ytd-brand-video-shelf-renderer) {',
 '    display: none !important; }',
+/* Deliberately NOT hiding a whole ytd-item-section-renderer that contains an ad
+   slot: the watch page keeps its entire related list in one such section, so
+   that rule removed every recommendation next to the player. The bare
+   ytd-ad-slot-renderer rule above already drops the ad on its own. */
 
 /* Comments first: the description block is collapsed by default and the info
    button in the YTPRO row brings it back. */
