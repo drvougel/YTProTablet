@@ -19,6 +19,9 @@ public class MediaCommandReceiver extends BroadcastReceiver {
         if (intent.getExtras() == null) return;
         
         String action = intent.getExtras().getString("actionname");
+        // YTPRO-TABLET: getString can return null, and switch on a null String
+        // throws. The receiver is reachable from other apps, so this is hittable.
+        if (action == null || web == null) return;
         Log.e("Action MainActivity", action);
 
         switch (action) {

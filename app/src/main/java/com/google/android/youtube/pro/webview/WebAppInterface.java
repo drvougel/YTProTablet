@@ -96,7 +96,10 @@ public class WebAppInterface {
 				activity.runOnUiThread(() -> Toast.makeText(activity, R.string.grant_storage, Toast.LENGTH_SHORT).show());
 				activity.requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE,Manifest.permission.READ_EXTERNAL_STORAGE}, 1);
 			}
-			return (activity.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_DENIED || activity.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_DENIED);
+			// YTPRO-TABLET: was returning true when permission was DENIED, so the
+			// caller's guard let the download start without storage access.
+			return activity.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+				&& activity.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
 		}
 		return true;
 	}
@@ -244,8 +247,11 @@ public class WebAppInterface {
 	public void pipvid(String mode) {
 		if (android.os.Build.VERSION.SDK_INT >= 26) {
 			try {
+				// YTPRO-TABLET
 				PictureInPictureParams params = new PictureInPictureParams.Builder()
-				.setAspectRatio(new Rational(mode.equals("portrait") ? 9 : 16, mode.equals("portrait") ? 16 : 9))
+				.setAspectRatio(mode.equals("portrait")
+					? MainActivity.pipAspect(9, 16)
+					: MainActivity.pipAspect(16, 9))
 				.build();
 				activity.enterPictureInPictureMode(params);
 			} catch (Exception e) { e.printStackTrace(); }

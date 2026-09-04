@@ -1,0 +1,11 @@
+# YTPRO-TABLET: the upstream repo ships no .gitignore, so a build would
+# otherwise put every intermediate and the machine-specific SDK path into git.
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/

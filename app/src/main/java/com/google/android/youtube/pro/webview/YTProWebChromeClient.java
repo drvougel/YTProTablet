@@ -14,6 +14,7 @@ import android.widget.FrameLayout;
 // Import the main files from the parent package
 import com.google.android.youtube.pro.MainActivity;
 import com.google.android.youtube.pro.R;
+import com.google.android.youtube.pro.TabletMode;
 
 public class YTProWebChromeClient extends WebChromeClient {
     private final MainActivity activity;
@@ -31,17 +32,23 @@ public class YTProWebChromeClient extends WebChromeClient {
 
     @Override
     public Bitmap getDefaultVideoPoster() {
-       return BitmapFactory.decodeResource(activity.getApplicationContext().getResources(), 2130837573);
+        // YTPRO-TABLET: this used to decode the hardcoded resource id 2130837573,
+        // which matches nothing in this project and would change on every rebuild.
+        return null;
     }
 
     @Override
     public void onShowCustomView(View paramView, WebChromeClient.CustomViewCallback viewCallback) {
-        // 1. Determine orientation for FULL SCREEN
-        mOriginalOrientation = activity.portrait ?
+        // YTPRO-TABLET: remember what was actually requested, so leaving fullscreen
+        // restores it. The old code stored a constant SCREEN_ORIENTATION_PORTRAIT
+        // instead, which left the app locked to portrait after every fullscreen exit.
+        mOriginalOrientation = activity.getRequestedOrientation();
+
+        int fullscreenOrientation = activity.portrait ?
                 android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT :
                 android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
 
-        if (activity.isPip) mOriginalOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT;
+        if (activity.isPip) fullscreenOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT;
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             activity.getWindow().setFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
@@ -57,12 +64,12 @@ public class YTProWebChromeClient extends WebChromeClient {
 
         mCustomView = paramView;
         mOriginalSystemUiVisibility = activity.getWindow().getDecorView().getSystemUiVisibility();
-        
-        // 2. Set the activity to full screen orientation (Landscape usually)
-        activity.setRequestedOrientation(mOriginalOrientation);
-        
-        // Store portrait so onHideCustomView knows what to go back to
-        mOriginalOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
+
+        // YTPRO-TABLET: a 14" panel is wide enough for a 9:16 short, so forcing a
+        // rotation there is pure annoyance. Phones keep the old behaviour.
+        if (!TabletMode.isLargeScreen(activity)) {
+            activity.setRequestedOrientation(fullscreenOrientation);
+        }
 
         mCustomViewCallback = viewCallback;
         ((FrameLayout) activity.getWindow().getDecorView()).addView(mCustomView, new FrameLayout.LayoutParams(-1, -1));
@@ -81,14 +88,18 @@ public class YTProWebChromeClient extends WebChromeClient {
         ((FrameLayout) activity.getWindow().getDecorView()).removeView(mCustomView);
         mCustomView = null;
         activity.getWindow().getDecorView().setSystemUiVisibility(mOriginalSystemUiVisibility);
-        
-        // 3. Set the activity BACK to the orientation saved right after going full screen (Portrait)
+
+        // YTPRO-TABLET: restore whatever was requested before fullscreen.
         activity.setRequestedOrientation(mOriginalOrientation);
-        
-        // Reset state for the next time we enter full screen
-        mOriginalOrientation = activity.portrait ?
-                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT :
-                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
+
+        // YTPRO-TABLET: restoring the saved system UI flags above brings the
+        // status and navigation bars back, so re-assert immersive.
+        activity.applyImmersive();
+
+        // YTPRO-TABLET: the WebView was never told fullscreen ended.
+        if (mCustomViewCallback != null) {
+            try { mCustomViewCallback.onCustomViewHidden(); } catch (Exception ignored) { }
+        }
 
         mCustomViewCallback = null;
         web.clearFocus();

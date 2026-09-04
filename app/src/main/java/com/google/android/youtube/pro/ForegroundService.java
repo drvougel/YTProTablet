@@ -96,7 +96,10 @@ public class ForegroundService extends Service {
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID,
                     "Background Play",
-                    NotificationManager.IMPORTANCE_MIN
+                    // YTPRO-TABLET: MIN gets the notification collapsed out of most
+                    // surfaces, and Xiaomi HyperOS treats a MIN foreground service as
+                    // a prime candidate to kill. LOW is still silent.
+                    NotificationManager.IMPORTANCE_LOW
             );
             notificationManager = getSystemService(NotificationManager.class);
             if (notificationManager != null) {
@@ -154,7 +157,11 @@ public class ForegroundService extends Service {
                 .setContentText(subtitle)
                 .setLargeIcon(largeIcon)
                 .setContentIntent(openAppPendingIntent)
-                .setStyle(new Notification.MediaStyle().setMediaSession(mediaSession.getSessionToken()))
+                // YTPRO-TABLET: setShowActionsInCompactView was missing, so the
+                // collapsed notification carried no transport controls.
+                .setStyle(new Notification.MediaStyle()
+                        .setMediaSession(mediaSession.getSessionToken())
+                        .setShowActionsInCompactView(0, 1, 2))
                 .addAction(R.drawable.ic_skip_previous_white, "Previous", prevPendingIntent);
 
         if ("play".equals(action)) {
@@ -197,7 +204,10 @@ public class ForegroundService extends Service {
         IntentFilter filter = new IntentFilter(ACTION_UPDATE_NOTIFICATION);
 
           if (Build.VERSION.SDK_INT >= 34 && getApplicationInfo().targetSdkVersion >= 34) {
-           registerReceiver(updateReceiver, filter,RECEIVER_EXPORTED);
+           // YTPRO-TABLET: the only sender is in-process. Exported on an
+           // unprotected implicit action, any installed app could inject
+           // arbitrary title/subtitle/base64 artwork into the notification.
+           registerReceiver(updateReceiver, filter, RECEIVER_NOT_EXPORTED);
           }
           else{
            registerReceiver(updateReceiver, filter);
@@ -262,7 +272,10 @@ public class ForegroundService extends Service {
                 .setContentTitle(title)
                 .setContentText(subtitle)
                 .setLargeIcon(largeIcon)
-                .setStyle(new Notification.MediaStyle().setMediaSession(mediaSession.getSessionToken()))
+                // YTPRO-TABLET
+                .setStyle(new Notification.MediaStyle()
+                        .setMediaSession(mediaSession.getSessionToken())
+                        .setShowActionsInCompactView(0, 1, 2))
                 .setContentIntent(openAppPendingIntent);
 
 
@@ -323,7 +336,17 @@ public class ForegroundService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        unregisterReceiver(updateReceiver);
+        // YTPRO-TABLET: unguarded unregister threw, and the MediaSession was never
+        // released - it leaked on every service stop/start cycle.
+        try {
+            if (updateReceiver != null) unregisterReceiver(updateReceiver);
+        } catch (Exception ignored) { }
+        if (mediaSession != null) {
+            try {
+                mediaSession.setActive(false);
+                mediaSession.release();
+            } catch (Exception ignored) { }
+        }
     }
 
     @Override

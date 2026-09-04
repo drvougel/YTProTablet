@@ -12,9 +12,6 @@ import android.widget.Toast;
 
 import com.google.android.youtube.pro.R;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-
 public class DownloadUtils {
 
     public static void downloadFile(Activity activity, String filename, String url, String mtype) {
@@ -27,7 +24,11 @@ public class DownloadUtils {
         }
         
         try {
-            String encodedFileName = URLEncoder.encode(filename, "UTF-8").replaceAll("\\+", "%20");
+            // YTPRO-TABLET: this is a filesystem name, not a URL component. URL
+            // encoding it wrote files to disk as "My%20Video%20%282024%29.mp4".
+            // Strip only what the filesystem actually rejects.
+            String encodedFileName = filename.replaceAll("[\\\\/:*?\"<>|\\r\\n]", "_").trim();
+            if (encodedFileName.length() == 0) encodedFileName = "video";
             DownloadManager downloadManager = (DownloadManager) activity.getSystemService(Context.DOWNLOAD_SERVICE);
             DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
             
@@ -36,13 +37,11 @@ public class DownloadUtils {
                    .setMimeType(mtype)
                    .setAllowedOverMetered(true)
                    .setAllowedOverRoaming(true)
-                   .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, encodedFileName)
+                   .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "YTPRO/" + encodedFileName) // YTPRO-TABLET
                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE | DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
                    
             downloadManager.enqueue(request);
             Toast.makeText(activity, activity.getString(R.string.dl_started), Toast.LENGTH_SHORT).show();
-        } catch (UnsupportedEncodingException e) {
-            e.printStackTrace();
         } catch (Exception ignored) {
             Toast.makeText(activity, ignored.toString(), Toast.LENGTH_SHORT).show();
         }

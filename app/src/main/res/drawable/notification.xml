@@ -1,10 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="680.000000dp"
-    android:height="468.000000dp"
-    android:viewportWidth="680.000000"
-    android:viewportHeight="468.000000">
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="816.000000"
+    android:viewportHeight="816.000000">
 
+    <!-- YTPRO-TABLET: was 680x468dp on a 680x468 viewport. Status bar icons are
+         square and inset, so the art is centred in a square viewport with a 10%
+         margin instead of being squashed. -->
+    <group
+        android:translateX="68"
+        android:translateY="174">
     <group
             android:translateY="468.000000"
             android:scaleX="0.100000"
@@ -25,5 +31,6 @@
             android:fillColor="#000000"
             android:strokeWidth="1"
             android:pathData="M3310 830 l0 -70 100 0 c87 0 103 3 120 20 27 27 26 71 -3 98 -21 19 -34 22 -120 22 l-97 0 0 -70z" />
+    </group>
     </group>
 </vector>

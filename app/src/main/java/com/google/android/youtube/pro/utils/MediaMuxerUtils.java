@@ -90,6 +90,11 @@ public class MediaMuxerUtils {
                     }
                 }
 
+                // YTPRO-TABLET: a fixed 1 MiB sample buffer is smaller than a single
+                // high-bitrate 1440p/2160p keyframe, so readSampleData threw and every
+                // download above 1080p failed. The tracks already tell us the size.
+                int maxInputSize = 1024 * 1024;
+
                 // ── Video track ───────────────────────────────────────────────
                 int muxerVideoTrackIndex = -1;
                 for (int i = 0; i < videoExtractor.getTrackCount(); i++) {
@@ -102,6 +107,7 @@ public class MediaMuxerUtils {
                         }
                         videoExtractor.selectTrack(i);
                         muxerVideoTrackIndex = muxer.addTrack(format);
+                        maxInputSize = Math.max(maxInputSize, maxInputSizeOf(format));
                         break;
                     }
                 }
@@ -125,6 +131,7 @@ public class MediaMuxerUtils {
                             }
                             audioExtractor.selectTrack(i);
                             muxerAudioTrackIndex = muxer.addTrack(format);
+                            maxInputSize = Math.max(maxInputSize, maxInputSizeOf(format));
                             break;
                         }
                     }
@@ -137,7 +144,8 @@ public class MediaMuxerUtils {
                     throw new Exception("Muxer failed to start: " + e.getMessage());
                 }
 
-                ByteBuffer buffer = ByteBuffer.allocate(1024 * 1024);
+                // YTPRO-TABLET: 32 MiB ceiling so a corrupt header cannot ask for the heap.
+                ByteBuffer buffer = ByteBuffer.allocate(Math.min(maxInputSize, 32 * 1024 * 1024));
                 MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
 
                 // ── Write video ───────────────────────────────────────────────
@@ -259,6 +267,20 @@ public class MediaMuxerUtils {
             // API 21-28
             file.delete();
         }
+    }
+
+    /**
+     * YTPRO-TABLET: the track format carries the largest sample it will ever hand
+     * back. Reading it is the difference between a working 1440p/2160p mux and
+     * an IllegalArgumentException out of readSampleData.
+     */
+    private static int maxInputSizeOf(MediaFormat format) {
+        try {
+            if (format != null && format.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
+                return format.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE);
+            }
+        } catch (Exception ignored) { }
+        return 0;
     }
 
     // Checks if a codec mime type is supported on this device

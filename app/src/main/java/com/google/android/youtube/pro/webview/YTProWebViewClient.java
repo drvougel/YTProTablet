@@ -8,6 +8,7 @@ import android.webkit.WebViewClient;
 
 import com.google.android.youtube.pro.ForegroundService;
 import com.google.android.youtube.pro.MainActivity;
+import com.google.android.youtube.pro.TabletMode;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -56,6 +57,14 @@ public class YTProWebViewClient extends WebViewClient {
 					if (!header.getKey().equalsIgnoreCase("Accept-Encoding")) {
 						connection.setRequestProperty(header.getKey(), header.getValue());
 					}
+				}
+				
+				// YTPRO-TABLET: the desktop UA has to reach the origin as well, and
+				// Sec-CH-UA-Mobile still announces a phone otherwise.
+				if (activity.desktopSite && activity.uaOverride != null) {
+					connection.setRequestProperty("User-Agent", activity.uaOverride);
+					connection.setRequestProperty("Sec-CH-UA-Mobile", "?0");
+					connection.setRequestProperty("Sec-CH-UA-Platform", "\"Linux\"");
 				}
 				
 				String cookies = android.webkit.CookieManager.getInstance().getCookie(url);
@@ -185,9 +194,23 @@ public class YTProWebViewClient extends WebViewClient {
 	@Override
 	public void onPageFinished(WebView view, String url) {
 		web.evaluateJavascript("if (window.trustedTypes && window.trustedTypes.createPolicy && !window.trustedTypes.defaultPolicy) {window.trustedTypes.createPolicy('default', {createHTML: (string) => string,createScriptURL: string => string, createScript: string => string, });}", null);
+		// YTPRO-TABLET: runs first so the desktop DOM already answers to the mobile
+		// selectors the upstream bundles look for.
+		String tabletJs = TabletMode.readAsset(activity, TabletMode.TABLET_ASSET);
+		if (tabletJs.length() > 0) web.evaluateJavascript(tabletJs, null);
+		
 		web.evaluateJavascript("(function () { var script = document.createElement('script'); script.src='https://youtube.com/ytpro_cdn/npm/ytpro@latest'; document.body.appendChild(script);  })();", null);
 		web.evaluateJavascript("(function () { var script = document.createElement('script'); script.src='https://youtube.com/ytpro_cdn/npm/ytpro@latest/bgplay.js'; document.body.appendChild(script);  })();", null);
-		web.evaluateJavascript("(function () { var script = document.createElement('script');script.type='module';script.src='https://youtube.com/ytpro_cdn/npm/ytpro@latest/innertube.js'; document.body.appendChild(script);  })();", null);
+		// YTPRO-TABLET: the downloader is switched off, and innertube.js exists only
+		// to serve it (format list, thumbnails, captions, SABR streaming, muxing).
+		// Not loading it also drops a chunk of startup work. To bring downloads back,
+		// restore this line and the CSS rule that hides the button.
+		//
+		// It would not have worked on the desktop site as it stands: the ytpro_cdn
+		// branch below builds its Content-Type from String.join over the header list,
+		// which yields "application/javascript; charset=utf-8, application/javascript;
+		// charset=utf-8". Classic scripts tolerate that, an ES module does not.
+		// web.evaluateJavascript("(function () { var script = document.createElement('script');script.type='module';script.src='https://youtube.com/ytpro_cdn/npm/ytpro@latest/innertube.js'; document.body.appendChild(script);  })();", null);
 		
 		
 		

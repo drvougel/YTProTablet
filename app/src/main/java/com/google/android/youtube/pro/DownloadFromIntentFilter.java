@@ -4,11 +4,12 @@ import android.os.Bundle;
 
 public class DownloadFromIntentFilter extends MainActivity {
 
+    // YTPRO-TABLET: was calling super.onCreate() (which already inflates and
+    // calls load(false)) and then inflating and loading a second time - two full
+    // page loads, MediaCommandReceiver registered twice, the first one leaked,
+    // and two BinaryStreamManager thread pools of which only one was cleaned up.
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.main);
-
-        load(true);
+    protected boolean downloadMode() {
+        return true;
     }
 }

@@ -19,3 +19,24 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# ── YTPRO-TABLET ───────────────────────────────────────────────────────────
+# minifyEnabled is on and this file was otherwise entirely comments. The whole
+# surface area of this app is @JavascriptInterface methods plus components
+# instantiated by name from the manifest, and both survived only via the
+# implicit rules in AGP's proguard-android.txt. Be explicit.
+
+-keepclassmembers class com.google.android.youtube.pro.webview.WebAppInterface {
+    @android.webkit.JavascriptInterface <methods>;
+}
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
+-keep class com.google.android.youtube.pro.receivers.** { *; }
+-keep class com.google.android.youtube.pro.ForegroundService { *; }
+-keep class com.google.android.youtube.pro.MainActivity { *; }
+-keep class com.google.android.youtube.pro.DownloadFromIntentFilter { *; }
+-keep class com.google.android.youtube.pro.webview.YTProWebView {
+    public <init>(android.content.Context, android.util.AttributeSet);
+}
